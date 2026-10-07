@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0c10">
-<title>Siam Network Map — Web</title>
+<title>Siam Network Map v0.4</title>
 <style>
 :root{--bg:#0b0c10;--card:#15171d;--card2:#1c1f27;--line:#30343e;--text:#f4f5f7;--muted:#a7acb7;--ok:#4ade80;--warn:#fbbf24;--bad:#fb7185}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
@@ -25,18 +25,17 @@ button,input,select{font:inherit}button{cursor:pointer}.app{max-width:1100px;mar
 @media(min-width:700px){.modal{align-items:center}.modalbox{border-radius:20px}}
 @media(max-width:650px){.grid{grid-template-columns:repeat(2,1fr)}.formgrid{grid-template-columns:1fr}.nav{grid-template-columns:repeat(4,1fr)}#map{height:390px}.brand{font-size:20px}}
 </style>
-<meta name="description" content="Siam Network Map — ISP network management web app"><meta name="apple-mobile-web-app-capable" content="yes">
 </head>
 <body>
 
 <div id="loginScreen" class="app">
   <div class="card login">
-    <div class="brand">📡 Siam Network Map <small>Web Edition • Mobile & Desktop</small></div>
+    <div class="brand">📡 Siam Network Map <small>v1 • Online Database</small></div>
     <h1>Login</h1>
     <input id="loginUser" placeholder="Username" autocomplete="username">
     <input id="loginPass" placeholder="Password" type="password" autocomplete="current-password">
     <button class="btn primary" style="width:100%;margin-top:6px" onclick="doLogin()">Login</button>
-    <p class="muted">Demo: admin / admin123 অথবা staff / staff123</p>
+    <p class="muted">Real server login</p>
     <p id="loginErr" class="bad"></p>
   </div>
 </div>
@@ -67,7 +66,7 @@ button,input,select{font:inherit}button{cursor:pointer}.app{max-width:1100px;mar
     </div>
     <div class="card">
       <h2>⚠️ Important</h2>
-      <p class="muted">এটি local/offline prototype। Data আপনার browser-এর localStorage-এ থাকে। Production-এ যাওয়ার আগে real database, secure authentication, server-side permission এবং backup যোগ করতে হবে।</p>
+      <p class="muted">এটি Real Backend-এর সাথে সংযুক্ত। Data server database-এ সংরক্ষিত হয়।</p>
     </div>
   </section>
 
@@ -112,7 +111,7 @@ button,input,select{font:inherit}button{cursor:pointer}.app{max-width:1100px;mar
     <p class="muted">Backup, restore, sample data এবং network health check.</p>
     <div class="actions">
       <button class="btn primary adminOnly" onclick="downloadBackup()">⬇️ Export Backup</button>
-      <button class="btn adminOnly" onclick="document.getElementById('restoreFile').click()">⬆️ Restore Backup</button>
+      <button class="btn adminOnly" onclick="document.getElementById("restoreFile").click()">⬆️ Restore Backup</button>
       <input id="restoreFile" type="file" accept=".json,application/json" style="display:none" onchange="restoreBackup(this.files[0])">
       <button class="btn" onclick="healthCheck()">🩺 Health Check</button>
       <button class="btn danger adminOnly" onclick="resetDemo()">♻️ Reset Demo Data</button>
@@ -140,7 +139,7 @@ button,input,select{font:inherit}button{cursor:pointer}.app{max-width:1100px;mar
 <div id="toast" class="toast"></div>
 
 <script>
-const KEY="siam_network_map_web_v1";
+const KEY="siam_network_map_v04";
 let state=JSON.parse(localStorage.getItem(KEY)||"null")||{
  nodes:[
   {id:"N1",name:"POP-01",type:"POP",x:180,y:260},
@@ -278,7 +277,7 @@ function delCustomer(id){if(!confirm("Customer delete করবেন?"))return;
 
 function downloadBackup(){
  if(role!=="Admin"){toast("Admin only");return}
- const payload={app:"Siam Network Map",version:"Web-v1",exportedAt:new Date().toISOString(),state};
+ const payload={app:"Siam Network Map",version:"v0.5",exportedAt:new Date().toISOString(),state};
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="siam-network-backup-"+new Date().toISOString().slice(0,10)+".json";a.click();
  URL.revokeObjectURL(a.href);toast("Backup downloaded");
@@ -310,6 +309,17 @@ function resetDemo(){
  localStorage.removeItem(KEY);location.reload();
 }
 
+</script>
+<script>
+const API_BASE=window.SIAM_API_BASE||"";
+async function api(path,options={}){const token=sessionStorage.getItem("siam_token"),headers={"Content-Type":"application/json",...(options.headers||{})};if(token)headers.Authorization="Bearer "+token;const r=await fetch(API_BASE+path,{...options,headers});let d=null;try{d=await r.json()}catch{}if(!r.ok)throw new Error(d?.message||"Server error");return d}
+async function loadRemoteState(){const d=await api("/api/state");if(d?.state){state=d.state;saveLocalMirror();renderAll()}}
+function saveLocalMirror(){try{localStorage.setItem(KEY,JSON.stringify(state))}catch{}}
+async function saveRemote(){try{saveLocalMirror();await api("/api/state",{method:"PUT",body:JSON.stringify({state})})}catch(e){console.error(e);toast("Server save failed")}}
+window.save=saveRemote;
+window.doLogin=async function(){const u=loginUser.value.trim(),p=loginPass.value;try{const d=await api("/api/auth/login",{method:"POST",body:JSON.stringify({username:u,password:p})});sessionStorage.setItem("siam_token",d.token);sessionStorage.role=d.user.role;role=d.user.role==="ADMIN"?"Admin":"Staff";await loadRemoteState();start()}catch(e){loginErr.textContent=e.message||"Login failed"}};
+window.logout=function(){sessionStorage.removeItem("siam_token");sessionStorage.removeItem("role");location.reload()};
+(async()=>{if(sessionStorage.getItem("siam_token")){try{await loadRemoteState();start()}catch{sessionStorage.removeItem("siam_token");sessionStorage.removeItem("role")}}})();
 </script>
 </body>
 </html>
